@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fresh Windows Installer Generator</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b21;
+      --border: #2a2f3a;
+      --text: #e6e8eb;
+      --muted: #8b92a5;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --toy-accent: #d946ef;
+      --batch-accent: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    p.subtitle { color: var(--muted); margin-bottom: 2rem; }
+    
+    .category {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .category h3 {
+      font-size: 1rem;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .category.toys h3 { color: var(--toy-accent); }
+    .category.batches h3 { color: var(--batch-accent); }
+
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.75rem;
+    }
+    .app-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .app-item:hover { background: rgba(255,255,255,0.05); }
+    .app-item input[type="checkbox"] {
+      width: 18px; height: 18px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .category.toys .app-item input[type="checkbox"] { accent-color: var(--toy-accent); }
+    .category.batches .app-item input[type="checkbox"] { accent-color: var(--batch-accent); }
+    
+    .app-item label {
+      cursor: pointer;
+      font-size: 0.95rem;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+    }
+    .app-desc {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin: 2rem 0;
+      align-items: center;
+    }
+    button {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+    button:hover { border-color: var(--muted); }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    button.primary:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .status {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      display: none;
+    }
+    .footer {
+      margin-top: 3rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🖥️ Fresh Windows Installer Generator</h1>
+    <p class="subtitle">Select apps, tweaks, and custom batch files from lemur5054/Web_Page.</p>
+
+    <div id="app-container"></div>
+
+    <!-- Dynamic Batch Files Section -->
+    <div id="batch-container" class="category batches" style="display:none;">
+      <h3>📂 Custom Batch Files <span style="font-size:0.8rem; color:var(--muted); margin-left:auto;">From GitHub</span></h3>
+      <div class="app-grid" id="batch-grid"></div>
+    </div>
+
+    <div class="controls">
+      <button onclick="toggleAll(true)">Select All</button>
+      <button onclick="toggleAll(false)">Deselect All</button>
+      <button class="primary" id="downloadBtn" onclick="generateAndDownload()">📦 Download Complete ZIP Package</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div class="footer">
+      Files generated locally. Batch files fetched from:<br>
+      <code>github.com/lemur5054/Web_Page/main/database/batches/</code>
+    </div>
+  </div>
+
+  <script>
+    // ⚙️ GITHUB CONFIGURATION - UPDATED PATH
+    const GITHUB_USER = "lemur5054";
+    const GITHUB_REPO = "Web_Page";
+    const GITHUB_BRANCH = "main";
+    const BATCH_FOLDER = "database/batches"; // ← Changed from "batches" to "database/batches"
+    
+    // Folder name INSIDE the ZIP where batch files will be stored
+    const ZIP_BATCH_SUBFOLDER = "CustomTools";
+
+    const BATCH_LIST_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${BATCH_FOLDER}/list.json`;
+    const BATCH_FILE_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${BATCH_FOLDER}/`;
+
+    // 📦 App Database
+    const appsData = [
+      {
+        category: "⚙️ Runtimes (Required)",
+        items: [
+          { name: "Edge WebView2", id: "Microsoft.EdgeWebView2Runtime", selected: true },
+          { name: "VC++ Redistributable 2015+", id: "Microsoft.VCRedist.2015+.x64", selected: true }
+        ]
+      },
+      {
+        category: "🌐 Browsers",
+        items: [
+          { name: "Mozilla Firefox", id: "Mozilla.Firefox", selected: true },
+          { name: "Google Chrome", id: "Google.Chrome", selected: true },
+          { name: "Brave Browser", id: "Brave.Brave", selected: true }
+        ]
+      },
+      {
+        category: "🛠️ Utilities & Dev",
+        items: [
+          { name: "Notepad++", id: "Notepad++.Notepad++", selected: true },
+          { name: "VS Code", id: "Microsoft.VisualStudioCode", selected: true },
+          { name: "7-Zip", id: "7zip.7zip", selected: true },
+          { name: "WinRAR", id: "RARLab.WinRAR", selected: true },
+          { name: "Rufus", id: "Rufus.Rufus", selected: true },
+          { name: "Wise Program Uninstaller", id: "WiseCleaner.WiseProgramUninstaller", selected: true },
+          { name: "WinDirStat", id: "WinDirStat.WinDirStat", selected: true }
+        ]
+      },
+      {
+        category: "🎬 Media & Streaming",
+        items: [
+          { name: "Spotify", id: "Spotify.Spotify", selected: true },
+          { name: "VLC Media Player", id: "VideoLAN.VLC", selected: true },
+          { name: "OBS Studio", id: "OBSProject.OBSStudio", selected: true }
+        ]
+      },
+      {
+        category: "🎮 Gaming & Chat",
+        items: [
+          { name: "Discord PTB", id: "Discord.Discord.PTB", selected: true },
+          { name: "Steam", id: "Valve.Steam", selected: true }
+        ]
+      },
+      {
+        category: "🤖 AI Environment",
+        items: [
+          { name: "Ollama + Qwen 3.5 (4B)", id: "Ollama.Ollama", selected: true }
+        ]
+      },
+      {
+        category: "🧸 Custom Windows Toys",
+        isToy: true,
+        items: [
+          { name: "Disable Telemetry (Script)", type: "script", id: "DisableTelemetry", selected: false },
+          { name: "Show File Extensions (Reg)", type: "reg", id: "ShowFileExt", selected: false },
+          { name: "Dark Mode Default (Reg)", type: "reg", id: "DarkMode", selected: false },
+          { name: "Remove Edge Shortcut (Script)", type: "script", id: "RemoveEdgeShortcut", selected: false },
+          { name: "Install PowerToys", id: "Microsoft.PowerToys", selected: false }
+        ]
+      }
+    ];
+
+    let batchData = [];
+    const container = document.getElementById('app-container');
+    const batchContainer = document.getElementById('batch-container');
+    const batchGrid = document.getElementById('batch-grid');
+    const statusEl = document.getElementById('status');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    function renderApps() {
+      container.innerHTML = appsData.map((cat, cIdx) => `
+        <div class="category ${cat.isToy ? 'toys' : ''}">
+          <h3>
+            ${cat.category}
+            <label style="margin-left:auto; font-size:0.8rem; color:var(--muted); cursor:pointer;">
+              <input type="checkbox" onchange="toggleCategory(${cIdx}, this.checked)" ${cat.items.every(i=>i.selected)?'checked':''}> 
+              Select All in Group
+            </label>
+          </h3>
+          <div class="app-grid">
+            ${cat.items.map((app, aIdx) => `
+              <div class="app-item">
+                <input type="checkbox" id="app-${cIdx}-${aIdx}" ${app.selected ? 'checked' : ''} 
+                  onchange="toggleApp(${cIdx}, ${aIdx}, this.checked)">
+                <label for="app-${cIdx}-${aIdx}">${app.name}</label>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 📡 Fetch Batch List from GitHub
+    async function fetchBatches() {
+      try {
+        const url = `${BATCH_LIST_URL}?t=${Date.now()}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error(`list.json not found. Create it at:\n${BATCH_LIST_URL.replace('?t='+Date.now(),'')}`);
+          }
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        batchData = await response.json();
+        
+        if (batchData.length > 0) {
+          batchContainer.style.display = 'block';
+          renderBatches();
+          console.log(`✅ Loaded ${batchData.length} batch files from GitHub`);
+        }
+      } catch (err) {
+        console.error("❌ Could not load batch files:", err);
+        statusEl.textContent = `⚠️ ${err.message}`;
+        statusEl.style.display = "block";
+        statusEl.style.background = "rgba(245, 158, 11, 0.1)";
+        statusEl.style.borderColor = "var(--warning)";
+        statusEl.style.color = "var(--warning)";
+      }
+    }
+
+    function renderBatches() {
+      batchGrid.innerHTML = batchData.map((batch, bIdx) => `
+        <div class="app-item">
+          <input type="checkbox" id="batch-${bIdx}" ${batch.selected ? 'checked' : ''} 
+            onchange="toggleBatch(${bIdx}, this.checked)">
+          <label for="batch-${bIdx}">
+            ${batch.name}
+            <span class="app-desc">${batch.description || batch.file}</span>
+          </label>
+        </div>
+      `).join('');
+    }
+
+    function toggleCategory(cIdx, state) {
+      appsData[cIdx].items.forEach(app => app.selected = state);
+      renderApps();
+    }
+    function toggleApp(cIdx, aIdx, state) {
+      appsData[cIdx].items[aIdx].selected = state;
+      renderApps();
+    }
+    function toggleBatch(bIdx, state) {
+      batchData[bIdx].selected = state;
+    }
+    function toggleAll(state) {
+      appsData.forEach(cat => cat.items.forEach(app => app.selected = state));
+      batchData.forEach(batch => batch.selected = state);
+      renderApps();
+      renderBatches();
+    }
+
+    const preFlightBat = `@echo off
+setlocal
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+chcp 65001 >nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-AppxPackage -Name Microsoft.WindowsStore | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register \\"$($_.InstallLocation)\\AppXManifest.xml\\" } 2>$null" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force 2>$null" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "winget source reset --force; winget source update" 2>&1 | findstr /v /i "copyright" >nul
+exit`;
+
+    const runInstallerBat = `@echo off
+setlocal
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+chcp 65001 >nul
+title Fresh Windows Installer
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-MyApps.ps1"
+echo.
+pause`;
+
+    async function generateAndDownload() {
+      const selectedApps = appsData.flatMap(cat => cat.items.filter(i => i.selected));
+      const selectedBatches = batchData.filter(b => b.selected);
+      
+      if (selectedApps.length === 0 && selectedBatches.length === 0) {
+        statusEl.textContent = "⚠️ Please select at least one item.";
+        statusEl.style.display = "block";
+        statusEl.style.background = "rgba(245, 158, 11, 0.1)";
+        statusEl.style.borderColor = "var(--warning)";
+        statusEl.style.color = "var(--warning)";
+        return;
+      }
+      statusEl.style.display = "none";
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = "⏳ Fetching from GitHub...";
+
+      try {
+        if (!window.JSZip) {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+          document.head.appendChild(script);
+          await new Promise((resolve, reject) => {
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('Failed to load ZIP library'));
+          });
+        }
+
+        // Fetch selected batch files from GitHub Raw
+        const batchFilesMap = {};
+        if (selectedBatches.length > 0) {
+          const fetchPromises = selectedBatches.map(async (batch) => {
+            try {
+              const url = `${BATCH_FILE_URL}${batch.file}?t=${Date.now()}`;
+              const res = await fetch(url);
+              if (!res.ok) throw new Error(`HTTP ${res.status} for ${batch.file}`);
+              const text = await res.text();
+              batchFilesMap[batch.file] = text;
+              console.log(`✅ Fetched: ${batch.file}`);
+            } catch (e) {
+              console.error(`❌ Failed to fetch ${batch.file}:`, e);
+              alert(`Warning: Could not download ${batch.file}. It will be skipped.`);
+            }
+          });
+          await Promise.all(fetchPromises);
+        }
+
+        downloadBtn.textContent = "⏳ Building package...";
+        
+        const standardApps = selectedApps.filter(item => !item.type).map(app => `    "${app.id}"`).join(",\n");
+        const toys = selectedApps.filter(item => item.type);
+
+        // ✅ DYNAMIC README (MOVED INSIDE FUNCTION - FIXES ReferenceError)
+        const appNames = selectedApps.map(a => `- ${a.name}`).join('\n');
+        const batchNames = selectedBatches.map(b => `- ${b.name}`).join('\n');
+        const readmeTxt = `FRESH WINDOWS INSTALLER PACKAGE
+==============================
+Generated: ${new Date().toLocaleString()}
+
+📦 SELECTED APPS:
+${appNames || '- None'}
+
+📂 CUSTOM BATCH FILES:
+${batchNames || '- None'}
+
+📖 INSTRUCTIONS:
+1. Run FreshPC-PreFlight.bat (Admin)
+2. Run Run-Installer.bat (Admin)
+3. Copy CustomTools folder to your chosen location (Desktop recommended)
+4. Check Desktop\\AppInstallLog.txt for results
+5. Chat with AI: ollama run qwen3.5:4b
+
+🔗 Source: github.com/lemur5054/Web_Page
+`;
+
+        const psLines = [
+          '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+          '',
+          'if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) { exit }',
+          '',
+          '$LogPath = "$env:USERPROFILE\\Desktop\\AppInstallLog.txt"',
+          '"=== Install Started: $(Get-Date) ===" | Out-File -FilePath $LogPath -Append',
+          '',
+          'winget source reset --force 2>&1 | Out-Null',
+          'winget source update 2>&1 | Out-Null',
+          '',
+          '# --- Standard Apps ---',
+          '$Apps = @(',
+          standardApps || '    # No standard apps',
+          ')',
+          '',
+          'foreach ($App in $Apps) {',
+          '    if ($App -eq "# No standard apps") { continue }',
+          '    Write-Host "`n[INSTALLING] $App" -ForegroundColor Cyan',
+          '    & winget install --id $App --force --accept-package-agreements --accept-source-agreements --source winget',
+          '    if ($LASTEXITCODE -eq 0) { "SUCCESS: $App" | Out-File -FilePath $LogPath -Append }',
+          '    else { "FAILED: $App" | Out-File -FilePath $LogPath -Append }',
+          '}',
+          '',
+          '# --- Custom Toys ---'
+        ];
+
+        toys.forEach(toy => {
+          psLines.push(`# Toy: ${toy.name}`);
+          if (toy.id === "DisableTelemetry") {
+             psLines.push('New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection" -Force | Out-Null');
+             psLines.push('Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection" -Name "AllowTelemetry" -Value 0 -Type DWord -Force');
+          } else if (toy.id === "ShowFileExt") {
+             psLines.push('Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" -Name "HideFileExt" -Value 0 -Type DWord -Force');
+          } else if (toy.id === "DarkMode") {
+             psLines.push('Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize" -Name "AppsUseLightTheme" -Value 0 -Type DWord -Force');
+             psLines.push('Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize" -Name "SystemUsesLightTheme" -Value 0 -Type DWord -Force');
+          } else if (toy.id === "RemoveEdgeShortcut") {
+             psLines.push('Remove-Item -Path "$env:USERPROFILE\\Desktop\\Microsoft Edge.lnk" -ErrorAction SilentlyContinue');
+          }
+          psLines.push('');
+        });
+
+        // --- Copy Batch Files to Desktop (From Subfolder) ---
+        if (Object.keys(batchFilesMap).length > 0) {
+          psLines.push('# --- Copy Custom Batch Files to Desktop ---');
+          psLines.push('Write-Host "`n[TOYS] Copying selected batch files to Desktop..." -ForegroundColor Magenta');
+          psLines.push('$DesktopPath = [Environment]::GetFolderPath("Desktop")');
+          psLines.push('$ScriptDir = $PSScriptRoot');
+          psLines.push('if (-not $ScriptDir) { $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition }');
+          psLines.push(`$BatchFolder = Join-Path $ScriptDir "${ZIP_BATCH_SUBFOLDER}"`);
+          psLines.push('');
+          
+          Object.keys(batchFilesMap).forEach(filename => {
+            psLines.push(`$SourceFile = Join-Path $BatchFolder "${filename}"`);
+            psLines.push(`$DestFile = Join-Path $DesktopPath "${filename}"`);
+            psLines.push(`Write-Host "  Copying: ${filename} ..." -ForegroundColor Cyan`);
+            psLines.push(`if (Test-Path $SourceFile) {`);
+            psLines.push(`    try {`);
+            psLines.push(`        Copy-Item -Path $SourceFile -Destination $DestFile -Force -ErrorAction Stop`);
+            psLines.push(`        Write-Host "  ✅ Copied to Desktop" -ForegroundColor Green`);
+            psLines.push(`        "COPIED: ${filename} to Desktop" | Out-File -FilePath $LogPath -Append`);
+            psLines.push(`    } catch {`);
+            psLines.push(`        Write-Host "  ❌ Error: $_" -ForegroundColor Red`);
+            psLines.push(`        "ERROR copying ${filename}: $_" | Out-File -FilePath $LogPath -Append`);
+            psLines.push(`    }`);
+            psLines.push(`} else {`);
+            psLines.push(`    Write-Host "  ⚠️ Source not found: $SourceFile" -ForegroundColor Yellow`);
+            psLines.push(`    "WARNING: Source not found: $SourceFile" | Out-File -FilePath $LogPath -Append`);
+            psLines.push(`}`);
+          });
+          psLines.push('');
+        }
+
+        // Ollama Setup
+        psLines.push('$OllamaPath = "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama.exe"');
+        psLines.push('if (Test-Path $OllamaPath) {');
+        psLines.push('    Start-Process -FilePath $OllamaPath -WindowStyle Hidden -ArgumentList "serve"');
+        psLines.push('    Start-Sleep -Seconds 5');
+        psLines.push('    & $OllamaPath pull qwen3.5:4b 2>&1 | Out-Null');
+        psLines.push('    "Ollama Setup Complete" | Out-File -FilePath $LogPath -Append');
+        psLines.push('}');
+        
+        psLines.push('Write-Host "`n[COMPLETE] Finished. Check Desktop for logs and batch files." -ForegroundColor Green');
+        psLines.push('"=== Install Complete: $(Get-Date) ===" | Out-File -FilePath $LogPath -Append');
+
+        const zip = new JSZip();
+        zip.file("Install-MyApps.ps1", psLines.join('\n'));
+        zip.file("FreshPC-PreFlight.bat", preFlightBat);
+        zip.file("Run-Installer.bat", runInstallerBat);
+        zip.file("README.txt", readmeTxt); // ← Now uses dynamic readmeTxt
+
+        // Add downloaded batch files to ZIP inside the subfolder
+        for (const [filename, content] of Object.entries(batchFilesMap)) {
+          zip.file(`${ZIP_BATCH_SUBFOLDER}/${filename}`, content);
+        }
+
+        const content = await zip.generateAsync({type:"blob"});
+        const url = URL.createObjectURL(content);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "FreshWindows-Installer.zip";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        statusEl.textContent = "✅ ZIP downloaded! Batch files will be copied to Desktop during install.";
+        statusEl.style.display = "block";
+        statusEl.style.background = "rgba(34, 197, 94, 0.1)";
+        statusEl.style.borderColor = "var(--success)";
+        statusEl.style.color = "var(--success)";
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "❌ Error: " + err.message;
+        statusEl.style.display = "block";
+        statusEl.style.background = "rgba(239, 68, 68, 0.1)";
+        statusEl.style.borderColor = "#ef4444";
+        statusEl.style.color = "#ef4444";
+      } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = "📦 Download Complete ZIP Package";
+      }
+    }
+
+    // Initialize
+    renderApps();
+    fetchBatches();
+  </script>
+</body>
+</html>
