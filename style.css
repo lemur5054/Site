@@ -400,3 +400,52 @@ body {
 .tutorial-step .card-btn {
     margin-top: 5px;
 }
+
+/* ---------- Checklist Styling (For Tutorials Page) ---------- */
+.checklist {
+    list-style: none;
+    padding: 0;
+    margin-top: 10px;
+}
+
+.checklist li {
+    position: relative;
+    padding-left: 32px;
+    margin-bottom: 14px;
+    font-size: 1.05rem;
+    color: #444;
+    line-height: 1.6;
+}
+
+.checklist li::before {
+    content: '☐';
+    position: absolute;
+    left: 0;
+    top: 2px;
+    color: #c62828; /* Matches your red theme */
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+/* ---------- Role Headers (For About Page) ---------- */
+.role-header {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #7e57c2; /* Matches sidebar accent */
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 30px;
+    margin-bottom: 10px;
+}
+
+.role-list {
+    list-style: none;
+    padding-left: 5px;
+    margin-bottom: 15px;
+}
+
+.role-list li {
+    font-size: 1.05rem;
+    color: #444;
+    margin-bottom: 6px;
+}

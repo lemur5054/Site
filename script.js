@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     const headerContainer = document.getElementById('header-container');
     if (headerContainer) {
-        fetch('header.html')
+        fetch('/header.html')
             .then(response => response.text())
             .then(data => {
                 headerContainer.innerHTML = data;
@@ -48,17 +48,52 @@ document.addEventListener('DOMContentLoaded', () => {
                     behavior: 'smooth', 
                     block: 'start' 
                 });
-
-                sidebarLinks.forEach(l => l.classList.remove('active'));
-                this.classList.add('active');
             }
         });
     });
 
+    // ==========================================
+    // 4. SCROLL SPY (Highlight active section on scroll)
+    // ==========================================
+    const contentArea = document.querySelector('.content');
+    
+    if (contentArea) {
+        const sections = document.querySelectorAll('.content section[id]');
+        const navLinks = document.querySelectorAll('.sidebar-list a[href^="#"]');
+
+        const updateActiveLink = () => {
+            let current = '';
+            
+            sections.forEach(section => {
+                const rect = section.getBoundingClientRect();
+                const containerRect = contentArea.getBoundingClientRect();
+                
+                // If the top of the section is near the top of the visible area (100px buffer)
+                if (rect.top <= containerRect.top + 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            // Update the active class in the sidebar
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.classList.add('active');
+                }
+            });
+        };
+
+        // Listen to scroll events inside the content area
+        contentArea.addEventListener('scroll', updateActiveLink);
+        
+        // Run once on page load to set the initial active state
+        updateActiveLink();
+    }
+
 });
 
 // ==========================================
-// 4. HEADER DROPDOWN MENUS
+// 5. HEADER DROPDOWN MENUS
 // ==========================================
 function initHeaderDropdowns() {
     const pagesBtn = document.getElementById('pages-btn');
@@ -78,4 +113,4 @@ function initHeaderDropdowns() {
             }
         });
     }
-}   
+}
